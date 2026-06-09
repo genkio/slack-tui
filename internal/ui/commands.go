@@ -4,11 +4,13 @@ import (
 	"context"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/genkio/slack-tui/internal/config"
+	"github.com/genkio/slack-tui/internal/emoji"
 	"github.com/genkio/slack-tui/internal/mcp"
 	"github.com/genkio/slack-tui/internal/slack"
 )
@@ -28,6 +30,13 @@ type (
 	openedMsg      struct{}
 	autoRefreshMsg struct{}
 	errMsg         struct{ err error }
+
+	emojiListMsg struct{ names []string }
+	emojiErrMsg  struct{ err error }
+	reactedMsg   struct {
+		emoji   string
+		removed bool
+	}
 )
 
 func fetchUnreads(ctx context.Context, c *mcp.Client, u config.UnreadsConfig) tea.Cmd {
@@ -72,6 +81,35 @@ func markRead(ctx context.Context, c *mcp.Client, convID, ts, label string) tea.
 			return errMsg{err}
 		}
 		return markedMsg{label: label}
+	}
+}
+
+func fetchEmojis(ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		names, err := emoji.List(ctx)
+		if err != nil {
+			return emojiErrMsg{err}
+		}
+		return emojiListMsg{names}
+	}
+}
+
+// react adds an emoji reaction, toggling it off when it is already present.
+// reactions_add reports "already_reacted" when the caller has the reaction, so
+// we fall back to reactions_remove to make pressing the same emoji a toggle.
+func react(ctx context.Context, c *mcp.Client, convID, ts, name string) tea.Cmd {
+	return func() tea.Msg {
+		err := c.AddReaction(ctx, convID, ts, name)
+		if err == nil {
+			return reactedMsg{emoji: name}
+		}
+		if !strings.Contains(err.Error(), "already_reacted") {
+			return errMsg{err}
+		}
+		if err := c.RemoveReaction(ctx, convID, ts, name); err != nil {
+			return errMsg{err}
+		}
+		return reactedMsg{emoji: name, removed: true}
 	}
 }
 

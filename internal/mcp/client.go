@@ -19,11 +19,13 @@ import (
 
 // Tool names exposed by slack-mcp-server that this client uses.
 const (
-	ToolUnreads  = "conversations_unreads"
-	ToolHistory  = "conversations_history"
-	ToolReplies  = "conversations_replies"
-	ToolMark     = "conversations_mark"
-	ToolChannels = "channels_list"
+	ToolUnreads        = "conversations_unreads"
+	ToolHistory        = "conversations_history"
+	ToolReplies        = "conversations_replies"
+	ToolMark           = "conversations_mark"
+	ToolChannels       = "channels_list"
+	ToolReactionAdd    = "reactions_add"
+	ToolReactionRemove = "reactions_remove"
 )
 
 // Client is a connected MCP session to a single slack-mcp-server process.

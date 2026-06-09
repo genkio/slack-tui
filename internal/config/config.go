@@ -157,6 +157,14 @@ func MarkToolEnabled() bool {
 	return truthy(os.Getenv("SLACK_MCP_MARK_TOOL"))
 }
 
+// ReactionToolEnabled reports whether reactions are turned on for the server.
+// Unlike the mark tool, SLACK_MCP_REACTION_TOOL also accepts channel lists
+// ("C123,D456") and exclusions ("!C123"), so any non-empty value enables the
+// feature; the server enforces the per-channel scoping itself.
+func ReactionToolEnabled() bool {
+	return strings.TrimSpace(os.Getenv("SLACK_MCP_REACTION_TOOL")) != ""
+}
+
 // SlackBaseURL normalizes the configured workspace into a base URL such as
 // "https://acme.slack.com", or "" when unset. It accepts a bare subdomain
 // ("acme"), a host ("acme.slack.com"), or a full URL.

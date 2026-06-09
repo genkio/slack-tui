@@ -30,6 +30,8 @@ never touches the Slack API or your tokens directly.
   threads inline.
 - Mark a conversation read from the list or from the detail view; the list
   refreshes and the item drops off.
+- React to a message with your workspace's custom emoji: fuzzy-search them by
+  name and toggle a reaction on or off.
 - On-demand refresh, a "last updated" indicator, filtering, and a help bar.
 - Tokens are never logged, printed, or written to disk by slack-tui.
 
@@ -105,6 +107,25 @@ export SLACK_MCP_MARK_TOOL=true
 
 Without it, reading still works; pressing `r` shows a reminder instead of marking.
 
+### Enable reactions
+
+Reactions are **disabled** on the server by default too. Turn them on:
+
+```bash
+export SLACK_MCP_REACTION_TOOL=true
+```
+
+Then in the detail view press `e` on a message to open the emoji picker, type to
+fuzzy-search, and press enter to add the reaction; pressing the same emoji again
+removes it. The value also accepts a channel allowlist (`C123,D456`) or an
+exclusion (`!C123`) instead of `true`.
+
+To fuzzy-search your workspace's **custom** emoji (the ones your coworkers
+uploaded), slack-tui fetches their names with a single read-only Slack
+`emoji.list` call. An `xoxp` token needs the `emoji:read` scope for this;
+browser-session (`xoxc`/`xoxd`) tokens work as-is. If the list can't be fetched
+you can still type an exact emoji name and react. See the [security note](#security-notes).
+
 ## Quick start
 
 ```bash
@@ -136,6 +157,7 @@ source .env && slack-tui
 | `space` | Expand/collapse the full text of the selected message (detail view) |
 | `esc` / `h` / `backspace` | Back to the list |
 | `o` | Open the selected message/thread in your browser (detail view) |
+| `e` | React to the selected message: fuzzy-search custom emoji, enter toggles it (detail view) |
 | `r` | Mark read (list: highlighted conversation; detail: up to the latest message) |
 | `R` | Refresh unreads |
 | `g` / `G` | Jump to top / bottom |
@@ -177,7 +199,7 @@ working copy; it is not required.
 
 **Server auth (forwarded to slack-mcp-server):** `SLACK_MCP_XOXP_TOKEN`,
 `SLACK_MCP_XOXB_TOKEN`, `SLACK_MCP_XOXC_TOKEN`, `SLACK_MCP_XOXD_TOKEN`,
-`SLACK_MCP_MARK_TOOL`.
+`SLACK_MCP_MARK_TOOL`, `SLACK_MCP_REACTION_TOOL`.
 
 **slack-tui options:**
 
@@ -235,8 +257,13 @@ args = ["run", "-i", "--rm",
 - slack-mcp-server is third-party code that can see every message you can. Pin a
   specific version or Docker digest (the default pins `@1.3.0`) and review it
   before pointing it at a sensitive workspace.
-- slack-tui makes no writes other than mark-as-read. The server's message-posting
-  tool is left disabled.
+- slack-tui's only writes are mark-as-read and emoji reactions, both done through
+  the server's own tools and both off until you enable them. The server's
+  message-posting tool is left disabled.
+- One exception to "never call Slack directly": to fuzzy-search custom emoji,
+  slack-tui makes a single read-only `emoji.list` request using the token already
+  in your environment, to fetch custom-emoji names. The token value is read only
+  for that one call; reactions and everything else still go through the server.
 - Never commit tokens. `.env` is gitignored; `.env.sample` ships placeholders.
 
 ## License

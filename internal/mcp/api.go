@@ -61,3 +61,20 @@ func (c *Client) MarkRead(ctx context.Context, channelID, ts string) error {
 	_, err := c.CallTool(ctx, ToolMark, args)
 	return err
 }
+
+// AddReaction adds an emoji reaction (name without colons, e.g. "partyparrot")
+// to the message at ts. Custom emoji use the same path as standard ones.
+func (c *Client) AddReaction(ctx context.Context, channelID, ts, emoji string) error {
+	_, err := c.CallTool(ctx, ToolReactionAdd, reactionArgs(channelID, ts, emoji))
+	return err
+}
+
+// RemoveReaction removes the caller's emoji reaction from the message at ts.
+func (c *Client) RemoveReaction(ctx context.Context, channelID, ts, emoji string) error {
+	_, err := c.CallTool(ctx, ToolReactionRemove, reactionArgs(channelID, ts, emoji))
+	return err
+}
+
+func reactionArgs(channelID, ts, emoji string) map[string]any {
+	return map[string]any{"channel_id": channelID, "timestamp": ts, "emoji": emoji}
+}

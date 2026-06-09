@@ -33,6 +33,8 @@ const historyLimit = "50"
 
 const markDisabledMsg = "Mark-as-read is off. Set SLACK_MCP_MARK_TOOL=true and restart."
 
+const reactDisabledMsg = "Reactions are off. Set SLACK_MCP_REACTION_TOOL=true and restart."
+
 const noLinkMsg = "Set SLACK_TUI_SLACK_DOMAIN to your workspace (e.g. acme) to open messages in the browser."
 
 // Run starts the TUI and blocks until the user quits. Full-screen (alt screen)
@@ -51,6 +53,7 @@ type Model struct {
 	screen  screen
 	list    list.Model
 	detail  detailModel
+	picker  pickerModel
 	spinner spinner.Model
 	help    help.Model
 	keys    keyMap
@@ -62,6 +65,9 @@ type Model struct {
 	statusErr       bool
 	lastRefresh     time.Time
 	markEnabled     bool
+	reactEnabled    bool
+	pickerActive    bool
+	emojiLoaded     bool
 	themeAuto       bool
 	refreshInterval time.Duration
 }
@@ -88,12 +94,14 @@ func newModel(ctx context.Context, client *mcp.Client, cfg config.Config, refres
 		screen:          screenList,
 		list:            l,
 		detail:          newDetail(),
+		picker:          newPicker(),
 		spinner:         sp,
 		help:            help.New(),
 		keys:            defaultKeys(),
 		loading:         true,
 		loadingNote:     "Loading unreads…",
 		markEnabled:     client.HasTool(mcp.ToolMark) && config.MarkToolEnabled(),
+		reactEnabled:    client.HasTool(mcp.ToolReactionAdd) && config.ReactionToolEnabled(),
 		themeAuto:       themeAuto,
 		refreshInterval: refresh,
 	}
@@ -186,6 +194,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus("Opened in browser.", false)
 		return m, nil
 
+	case emojiListMsg:
+		m.emojiLoaded = true
+		m.picker.setNames(msg.names)
+		return m, nil
+
+	case emojiErrMsg:
+		// Keep the picker open: the user can still type an exact name to react.
+		m.picker.setErr(msg.err)
+		return m, nil
+
+	case reactedMsg:
+		m.pickerActive = false
+		m.picker.close()
+		verb := "added"
+		if msg.removed {
+			verb = "removed"
+		}
+		m.setStatus(fmt.Sprintf("Reaction :%s: %s", msg.emoji, verb), false)
+		m.detail.keepCursorTS = m.picker.ts // don't jump the cursor on the refresh
+		return m, tea.Batch(m.spinner.Tick, fetchHistory(m.ctx, m.client, m.detail.conv.ID, historyLimit))
+
 	case errMsg:
 		m.loading = false
 		m.detail.loading = false
@@ -202,6 +231,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
+	}
+
+	// While the emoji picker is open it captures keys (typing must reach the
+	// search field), so it is handled before the global bindings.
+	if m.pickerActive {
+		return m.handlePickerKey(msg)
 	}
 
 	switch {
@@ -294,11 +329,63 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, openURL(url)
 
+	case key.Matches(msg, m.keys.React):
+		return m.openPicker()
+
 	case key.Matches(msg, m.keys.Mark):
 		c := m.detail.conv
 		return m.mark(c.ID, m.detail.latestTS(), c.Name)
 	}
 	return m, nil
+}
+
+// openPicker starts the emoji picker for the cursored message, fetching the
+// custom-emoji list on first use.
+func (m Model) openPicker() (tea.Model, tea.Cmd) {
+	if !m.reactEnabled {
+		m.setStatus(reactDisabledMsg, true)
+		return m, nil
+	}
+	msg, ok := m.detail.selectedMessage()
+	if !ok {
+		return m, nil
+	}
+	m.clearStatus()
+	m.pickerActive = true
+	cmds := []tea.Cmd{m.picker.open(m.detail.conv.ID, msg.ID)}
+	if !m.emojiLoaded {
+		m.picker.loading = true
+		cmds = append(cmds, fetchEmojis(m.ctx))
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// handlePickerKey routes keys while the emoji picker is open. Only ctrl+c, esc,
+// enter, and the arrow/ctrl movement keys are intercepted; everything else
+// (letters, backspace) edits the search field.
+func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.pickerActive = false
+		m.picker.close()
+		m.clearStatus()
+		return m, nil
+	case "enter":
+		name := m.picker.selected()
+		if name == "" {
+			return m, nil
+		}
+		return m, react(m.ctx, m.client, m.picker.channelID, m.picker.ts, name)
+	case "up", "ctrl+p":
+		m.picker.moveCursor(-1)
+		return m, nil
+	case "down", "ctrl+n":
+		m.picker.moveCursor(1)
+		return m, nil
+	}
+	return m, m.picker.update(msg)
 }
 
 // mark issues a mark-as-read, or explains why it can't.
@@ -366,6 +453,9 @@ func (m Model) headerView() string {
 
 func (m Model) bodyView() string {
 	h := m.bodyHeight()
+	if m.pickerActive {
+		return m.picker.View(m.width, h)
+	}
 	if m.screen == screenDetail {
 		if m.detail.loading {
 			return center(m.spinner.View()+" Loading messages…", m.width, h)

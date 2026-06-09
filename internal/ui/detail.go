@@ -25,6 +25,7 @@ type detailModel struct {
 	bodyExpanded map[string]bool            // message ts whose full text is shown
 	cursor       int
 	yoff         int
+	keepCursorTS string // when set, the next setMessages re-selects this ts instead of the first unread
 
 	vp      viewport.Model
 	width   int
@@ -57,8 +58,24 @@ func (d *detailModel) setMessages(msgs []slack.Message) {
 	sortByTime(msgs)
 	d.messages = msgs
 	d.loading = false
-	d.cursor = d.firstUnreadIndex()
+	if d.keepCursorTS != "" {
+		d.cursor = d.indexOfTS(d.keepCursorTS)
+		d.keepCursorTS = ""
+	} else {
+		d.cursor = d.firstUnreadIndex()
+	}
+	d.clampCursor()
 	d.render()
+}
+
+// indexOfTS returns the index of the message with the given ts, or 0 if absent.
+func (d detailModel) indexOfTS(ts string) int {
+	for i, m := range d.messages {
+		if m.ID == ts {
+			return i
+		}
+	}
+	return 0
 }
 
 func (d *detailModel) setReplies(threadTS string, msgs []slack.Message) {

@@ -22,6 +22,7 @@ func testModel() Model {
 		screen:  screenList,
 		list:    l,
 		detail:  newDetail(),
+		picker:  newPicker(),
 		spinner: spinner.New(),
 		help:    help.New(),
 		keys:    defaultKeys(),
@@ -161,6 +162,80 @@ func TestRefreshPreservesSelection(t *testing.T) {
 	})
 	if it, ok := m.list.SelectedItem().(convItem); !ok || it.conv.ID != "B" {
 		t.Errorf("expected B still selected after refresh, got ok=%v id=%q", ok, it.conv.ID)
+	}
+}
+
+func TestPickerFuzzyFilter(t *testing.T) {
+	p := newPicker()
+	p.setNames([]string{"cat", "catjam", "party_cat", "dog", "thumbsup"})
+	if len(p.filtered) != 5 {
+		t.Fatalf("empty query should show all names, got %d", len(p.filtered))
+	}
+
+	p.input.SetValue("cat")
+	p.filter()
+	got := strings.Join(p.filtered, ",")
+	for _, want := range []string{"cat", "catjam", "party_cat"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("query cat missing %q, got %v", want, p.filtered)
+		}
+	}
+	for _, absent := range []string{"dog", "thumbsup"} {
+		for _, m := range p.filtered {
+			if m == absent {
+				t.Errorf("query cat should not match %q", absent)
+			}
+		}
+	}
+}
+
+func TestPickerSelectedFallback(t *testing.T) {
+	p := newPicker()
+	p.setNames([]string{"partyparrot"})
+	p.input.SetValue("no_such_emoji")
+	p.filter()
+	// No fuzzy match -> Enter still reacts with whatever was typed (covers
+	// standard emoji, which aren't in the custom list).
+	if got := p.selected(); got != "no_such_emoji" {
+		t.Errorf("selected with no match = %q, want the typed text", got)
+	}
+}
+
+func TestReactKeyOpensPicker(t *testing.T) {
+	m := testModel()
+	m.reactEnabled = true
+	m.emojiLoaded = true // skip the network fetch
+	m.width, m.height = 80, 24
+	m.layout()
+	m.screen = screenDetail
+	m.detail.open(slack.Conversation{ID: "C1", Name: "general", Type: slack.TypeInternal})
+	m.detail.setSize(m.bodyWidth(), m.bodyHeight())
+	m.detail.setMessages([]slack.Message{{ID: "1700000100.000100", RealName: "Alice", Text: "hi"}})
+
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	mm, ok := tm.(Model)
+	if !ok || !mm.pickerActive {
+		t.Fatalf("expected picker active after 'e', pickerActive=%v", ok && mm.pickerActive)
+	}
+	if !strings.Contains(mm.View().Content, "Add reaction") {
+		t.Errorf("picker view should be shown:\n%s", mm.View().Content)
+	}
+}
+
+func TestReactDisabledShowsHint(t *testing.T) {
+	m := testModel()
+	m.reactEnabled = false
+	m.screen = screenDetail
+	m.detail.setMessages([]slack.Message{{ID: "1700000100.000100", RealName: "Alice", Text: "hi"}})
+
+	tm, _ := m.openPicker()
+	mm := tm.(Model)
+	if mm.pickerActive {
+		t.Error("picker must not open when reactions are disabled")
+	}
+	if !strings.Contains(mm.status, "SLACK_MCP_REACTION_TOOL") {
+		t.Errorf("expected an enable hint, got %q", mm.status)
 	}
 }
 
