@@ -23,7 +23,7 @@ refresh = ""
 # nothing installed but Node. To run it in Docker instead:
 #   command = "docker"
 #   args = ["run", "-i", "--rm",
-#           "-e", "SLACK_MCP_XOXP_TOKEN", "-e", "SLACK_MCP_MARK_TOOL",
+#           "-e", "SLACK_MCP_XOXP_TOKEN", "-e", "SLACK_MCP_MARK_TOOL", "-e", "SLACK_MCP_REACTION_TOOL",
 #           "ghcr.io/korotovsky/slack-mcp-server:1.3.0", "--transport", "stdio"]
 command = "npx"
 args = ["-y", "slack-mcp-server@1.3.0", "--transport", "stdio"]

@@ -20,6 +20,22 @@ func TestRefreshInterval(t *testing.T) {
 	}
 }
 
+func TestReactionToolEnabled(t *testing.T) {
+	cases := map[string]bool{
+		"":          false,
+		"   ":       false,
+		"true":      true,
+		"C123,D456": true, // channel allowlist
+		"!C123":     true, // exclusion
+	}
+	for in, want := range cases {
+		t.Setenv("SLACK_MCP_REACTION_TOOL", in)
+		if got := ReactionToolEnabled(); got != want {
+			t.Errorf("ReactionToolEnabled(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestSlackBaseURL(t *testing.T) {
 	cases := map[string]string{
 		"":                        "",

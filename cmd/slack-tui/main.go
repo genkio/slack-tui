@@ -94,6 +94,12 @@ func printCheck(client *mcp.Client) {
 	if client.HasTool(mcp.ToolMark) && !config.MarkToolEnabled() {
 		fmt.Println("       set SLACK_MCP_MARK_TOOL=true to enable marking")
 	}
+
+	reactReady := client.HasTool(mcp.ToolReactionAdd) && config.ReactionToolEnabled()
+	fmt.Printf("  %s  add reactions (%s)\n", yesNo(reactReady), mcp.ToolReactionAdd)
+	if client.HasTool(mcp.ToolReactionAdd) && !config.ReactionToolEnabled() {
+		fmt.Println("       set SLACK_MCP_REACTION_TOOL=true to enable reactions")
+	}
 }
 
 func yesNo(ok bool) string {
