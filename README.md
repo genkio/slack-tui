@@ -68,10 +68,17 @@ mode you pick.
 
 ### Extracting browser-session tokens (xoxc + xoxd)
 
-The browser-session mode needs **both** values, and they live in different
-places. Grab them from the browser where you are logged into Slack (Brave and
-other Chromium browsers work too). Open `https://app.slack.com` and open
-DevTools (`Cmd+Option+I` on macOS, `F12` elsewhere).
+**Easy way:** `make auth` opens a browser, waits for you to log into your
+workspace, then writes both `SLACK_MCP_XOXC_TOKEN` and `SLACK_MCP_XOXD_TOKEN`
+into `.env` for you. It needs [`playwright-cli`](https://github.com/microsoft/playwright)
+and `jq` on your PATH. Signed into more than one workspace?
+`./tools/auth.sh slack .env <name>` picks the one matching `<name>`. Re-run when
+the session expires.
+
+**Manual way:** the browser-session mode needs **both** values, and they live in
+different places. Grab them from the browser where you are logged into Slack
+(Brave and other Chromium browsers work too). Open `https://app.slack.com` and
+open DevTools (`Cmd+Option+I` on macOS, `F12` elsewhere).
 
 1. **`xoxc` token** (Console tab). The console blocks pasted code until you type
    `allow pasting` once and press enter. Then run:
@@ -142,8 +149,13 @@ To avoid re-exporting tokens every session, copy the sample env file and source 
 
 ```bash
 cp .env.sample .env          # .env is gitignored; fill in your values
-source .env && slack-tui
+make auth                    # browser-session mode: log in once; writes xoxc/xoxd + domain to .env
+make check                   # verify the connection
+make run                     # launch the TUI
 ```
+
+`make check` and `make run` source `.env` for you. The equivalent without Make is
+`source .env && slack-tui --check` / `source .env && slack-tui`.
 
 `.env.sample` lists every supported variable. To load it automatically, add
 `source /path/to/slack-tui/.env` to your `~/.zshrc`.

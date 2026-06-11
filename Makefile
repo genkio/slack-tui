@@ -4,16 +4,19 @@ VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 .DEFAULT_GOAL := build
-.PHONY: build run check test fmt vet tidy lint install clean rename help
+.PHONY: build run check auth test fmt vet tidy lint install clean rename help
 
 build: ## Build the binary into ./slack-tui
 	go build $(LDFLAGS) -o $(BINARY) $(PKG)
 
+auth: ## Capture Slack browser session (xoxc + xoxd + workspace domain) into .env (opens a browser to log in)
+	./tools/auth.sh slack .env
+
 run: ## Build and run the TUI (sources .env if present)
 	@if [ -f .env ]; then . ./.env; fi; go run $(PKG)
 
-check: ## Connect to the server, list its tools, and exit
-	go run $(PKG) --check
+check: ## Connect to the server, list its tools, and exit (sources .env if present)
+	@if [ -f .env ]; then . ./.env; fi; go run $(PKG) --check
 
 test: ## Run tests
 	go test ./...
